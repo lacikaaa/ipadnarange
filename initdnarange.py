@@ -52,15 +52,16 @@ class DnaRangeIniter:
     def __init__(self, repl):
         """Console couldn't resolve the import otherwise in class methods"""
         self.replication = repl
+        self.localReplManager = self.replication.ReplicationManager(api.env.realm, api.env.host, starttls=True, port=389)
 
-    def validate_dna_range_missing(self, r):
-        dna_range_start, dna_range_end = r.get_DNA_range(api.env.host)
+    def validate_dna_range_missing(self):
+        dna_range_start, dna_range_end = self.localReplManager.get_DNA_range(api.env.host)
         print ("DNA range on this server: {} - {}".format(dna_range_start, dna_range_end))
         if dna_range_start is not None:
             print ("DNA range is already set on this server, exiting")
             exit(0)
 
-        dna_next_range_start, dna_next_range_end = r.get_DNA_next_range(api.env.host)
+        dna_next_range_start, dna_next_range_end = self.localReplManager.get_DNA_next_range(api.env.host)
         print ("DNA next range on this server: {} - {}".format(dna_next_range_start, dna_next_range_end))
         if dna_next_range_start is not None:
             print ("DNA next range is already set on this server, exiting")
@@ -104,7 +105,7 @@ class DnaRangeIniter:
         print ("ipabaseid: {} ipaidrangesize: {}".format(ipabaseid, ipaidrangesize))
         return ipabaseid, ipabaseid + ipaidrangesize
 
-    def setRanges(self, freeRanges, localReplManager):
+    def setRanges(self, freeRanges):
         if len(freeRanges) == 0:
             print ("There  no free ranges to set")
         else:
@@ -115,7 +116,7 @@ class DnaRangeIniter:
                 else:
                     try:
                         print ("Try to set next range to ", freeRange)
-                        ret = localReplManager.save_DNA_next_range(freeRange[0], freeRange[1])
+                        ret = self.localReplManager.save_DNA_next_range(freeRange[0], freeRange[1])
                         if ret:
                             print ("Successfully set next range")
                             return
@@ -127,18 +128,20 @@ class DnaRangeIniter:
 
 
 def create_and_delete_user():
-    user_for_test = api.env.host.split('.')[0]
+    user_for_test = api.env.host.split('.')[0] + "rangeinit"
+    print ("Add user [{}] to ensure dna range is assigned".format(user_for_test))
     api.Command.user_add(user_for_test, givenname=u'idrange', sn=u'allocation')
+    print ("Delete user [{}]".format(user_for_test))
     api.Command.user_del(user_for_test)
+    print ("User [{}] deleted".format(user_for_test))
 
 
 rangeIniter = DnaRangeIniter(replication)
 
-localReplManager = replication.ReplicationManager(api.env.realm, api.env.host, starttls=True, port=389)
-rangeIniter.validate_dna_range_missing(localReplManager)
+rangeIniter.validate_dna_range_missing()
 originalRangeSet = RangeSet([(rangeIniter.grab_original_range())])
 assignedRanges = RangeSet(rangeIniter.grab_all_assigned_ranges())
 freeRanges = originalRangeSet.subWithResult(RangeSet([]), assignedRanges).ranges
 print ("Free ranges: ", freeRanges)
-rangeIniter.setRanges(freeRanges, localReplManager)
+rangeIniter.setRanges(freeRanges)
 create_and_delete_user()
