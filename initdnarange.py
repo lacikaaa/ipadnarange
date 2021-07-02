@@ -1,6 +1,8 @@
 from ipalib import api
 from ipaserver.install import replication
 import logging
+from random import randint
+from time import sleep
 
 
 class RangeSet:
@@ -140,8 +142,15 @@ rangeIniter = DnaRangeIniter(replication)
 
 rangeIniter.validate_dna_range_missing()
 originalRangeSet = RangeSet([(rangeIniter.grab_original_range())])
-assignedRanges = RangeSet(rangeIniter.grab_all_assigned_ranges())
-freeRanges = originalRangeSet.subWithResult(RangeSet([]), assignedRanges).ranges
+try:
+    assignedRanges = RangeSet(rangeIniter.grab_all_assigned_ranges())
+    freeRanges = originalRangeSet.subWithResult(RangeSet([]), assignedRanges).ranges
+except ValueError:
+    logging.exception("Calculating failed, most probably the ranges returned are out of sync. Retry... Ex: ")
+    sleep(randint(3,10))
+    assignedRanges = RangeSet(rangeIniter.grab_all_assigned_ranges())
+    freeRanges = originalRangeSet.subWithResult(RangeSet([]), assignedRanges).ranges
+
 print ("Free ranges: ", freeRanges)
 rangeIniter.setRanges(freeRanges)
 create_and_delete_user()
